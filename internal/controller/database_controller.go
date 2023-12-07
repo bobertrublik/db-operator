@@ -192,7 +192,6 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		phase := dbcr.Status.Phase
 		logrus.Infof("DB: namespace=%s, name=%s start %s", dbcr.Namespace, dbcr.Name, phase)
 
-		// TODO: remove phase metric
 		defer promDBsPhaseTime.WithLabelValues(phase).Observe(kci.TimeTrack(time.Now()))
 		// TODO: send event for each phase change below
 		err := r.createDatabase(ctx, dbcr, ownership)

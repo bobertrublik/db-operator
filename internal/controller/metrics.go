@@ -34,7 +34,6 @@ var (
 			"database",
 		})
 
-	// TODO: remove phase metric
 	promDBsPhaseTime = promauto.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  "db_operator",
 		Subsystem:  "handler",
@@ -46,7 +45,6 @@ var (
 			"phase",
 		})
 
-	// TODO: remove phase metric
 	promDBsPhaseError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "db_operator",
 		Subsystem: "handler",
