@@ -9,6 +9,7 @@ Check if DbInstance exists on cluster and running.
 $ kubectl get dbin
 ```
 
+# TODO: remove phase metric
 The result should be like below.
 ```
 NAME              PHASE      STATUS
@@ -261,6 +262,7 @@ To check **Database** status
 kubectl get db example-db
 ```
 
+# TODO: remove phase metric
 The output should be like
 ```
 NAME          PHASE   STATUS   PROTECTED   DBINSTANCE         AGE

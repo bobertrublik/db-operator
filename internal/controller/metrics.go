@@ -22,6 +22,7 @@ import (
 )
 
 var (
+	// TODO: remove phase metric
 	promDBsPhase = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "db_operator",
 		Subsystem: "database",
@@ -46,6 +47,7 @@ var (
 			"database",
 		})
 
+	// TODO: remove phase metric
 	promDBsPhaseTime = promauto.NewSummaryVec(prometheus.SummaryOpts{
 		Namespace:  "db_operator",
 		Subsystem:  "handler",
@@ -57,6 +59,7 @@ var (
 			"phase",
 		})
 
+	// TODO: remove phase metric
 	promDBsPhaseError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "db_operator",
 		Subsystem: "handler",
@@ -87,6 +90,7 @@ var (
 		})
 )
 
+// TODO: remove phase metric
 func dbPhaseToFloat64(phase string) float64 {
 	phaseMap := map[string]float64{
 		"default":                   -10,

@@ -56,6 +56,7 @@ type Credentials struct {
 
 type Templates []*Template
 
+// TODO: remove phase metric
 // DatabaseStatus defines the observed state of Database
 type DatabaseStatus struct {
 	// Important: Run "make generate" to regenerate code after modifying this file

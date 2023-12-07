@@ -106,12 +106,14 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}()
 
 	promDBsStatus.WithLabelValues(dbcr.Namespace, dbcr.Spec.Instance, dbcr.Name).Set(boolToFloat64(dbcr.Status.Status))
+	// TODO: remove phase metric
 	promDBsPhase.WithLabelValues(dbcr.Namespace, dbcr.Spec.Instance, dbcr.Name).Set(dbPhaseToFloat64(dbcr.Status.Phase))
 
 	// Check if the Database is marked to be deleted, which is
 	// indicated by the deletion timestamp being set.
 	isDatabaseMarkedToBeDeleted := dbcr.GetDeletionTimestamp() != nil
 	if isDatabaseMarkedToBeDeleted {
+		// TODO: delete, send deletion event
 		dbcr.Status.Phase = dbPhaseDelete
 		// Run finalization logic for database. If the
 		// finalization logic fails, don't remove the finalizer so
@@ -188,10 +190,13 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			)
 		}
 
+		// TODO: remove phase variable, maybe send event where phase = Reason
 		phase := dbcr.Status.Phase
 		logrus.Infof("DB: namespace=%s, name=%s start %s", dbcr.Namespace, dbcr.Name, phase)
 
+		// TODO: remove phase metric
 		defer promDBsPhaseTime.WithLabelValues(phase).Observe(kci.TimeTrack(time.Now()))
+		// TODO: send event for each phase change below
 		err := r.createDatabase(ctx, dbcr, ownership)
 		if err != nil {
 			// when database creation failed, don't requeue request. to prevent exceeding api limit (ex: against google api)
@@ -284,6 +289,7 @@ func (r *DatabaseReconciler) initialize(ctx context.Context, dbcr *kindav1beta1.
 		if !instance.Status.Status {
 			return errors.New("instance status not true")
 		}
+		// TODO: send event
 		dbcr.Status.Phase = dbPhaseCreate
 		return nil
 	}

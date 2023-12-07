@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+// TODO: remove phase metric
 func init() {
 	metrics.Registry.MustRegister(promDBsPhaseTime, promDBsPhase, promDBsStatus, promDBsPhaseError, promDBInstancesPhase, promDBInstancesPhaseTime)
 }
