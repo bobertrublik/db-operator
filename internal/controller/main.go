@@ -25,5 +25,5 @@ import (
 
 // TODO: remove phase metric
 func init() {
-	metrics.Registry.MustRegister(promDBsPhaseTime, promDBsPhase, promDBsStatus, promDBsPhaseError, promDBInstancesPhase, promDBInstancesPhaseTime)
+	metrics.Registry.MustRegister(promDBsPhaseTime, promDBsStatus, promDBsPhaseError, promDBInstancesPhase, promDBInstancesPhaseTime)
 }

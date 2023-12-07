@@ -22,19 +22,6 @@ import (
 )
 
 var (
-	// TODO: remove phase metric
-	promDBsPhase = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "db_operator",
-		Subsystem: "database",
-		Name:      "phase",
-		Help:      "Return information about the phase of a database (cr) object",
-	},
-		[]string{
-			"db_namespace",
-			"dbinstance",
-			"database",
-		})
-
 	promDBsStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "db_operator",
 		Subsystem: "database",
