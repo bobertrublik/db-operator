@@ -322,11 +322,6 @@ spec:
     subresources:
       status: {}
   - additionalPrinterColumns:
-    # TODO: remove phase
-    - description: current db phase
-      jsonPath: .status.phase
-      name: Phase
-      type: string
     - description: current db status
       jsonPath: .status.status
       name: Status
@@ -595,26 +590,13 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      # TODO: remove phase
-                      phase:
-                        description: 'Important: Run "make generate" to regenerate
-                          code after modifying this file'
-                        type: string
                       status:
                         type: boolean
                     required:
-                    # TODO: remove phase
-                    - phase
                     - status
                     type: object
                 type: object
               monitorUserSecret:
-                type: string
-              # TODO: remove phase
-              phase:
-                description: 'Important: Run "make generate" to regenerate code after
-                  modifying this file Add custom validation using kubebuilder tags:
-                  https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
                 type: string
               proxyStatus:
                 description: DatabaseProxyStatus defines whether proxy for database

@@ -61,7 +61,6 @@ type Templates []*Template
 type DatabaseStatus struct {
 	// Important: Run "make generate" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	Phase                 string              `json:"phase"`
 	Status                bool                `json:"status"`
 	MonitorUserSecretName string              `json:"monitorUserSecret,omitempty"`
 	ProxyStatus           DatabaseProxyStatus `json:"proxyStatus,omitempty"`

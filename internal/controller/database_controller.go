@@ -80,6 +80,7 @@ var (
 //+kubebuilder:rbac:groups=kinda.rocks,resources=databases/finalizers,verbs=update
 
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	var phase string
 	_ = r.Log.WithValues("database", req.NamespacedName)
 
 	reconcilePeriod := r.Interval * time.Second
@@ -111,28 +112,28 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// indicated by the deletion timestamp being set.
 	isDatabaseMarkedToBeDeleted := dbcr.GetDeletionTimestamp() != nil
 	if isDatabaseMarkedToBeDeleted {
-		// TODO: delete, send deletion event
-		dbcr.Status.Phase = dbPhaseDelete
+		phase = dbPhaseDelete
+		r.Recorder.Event(dbcr, "Normal", phase, "Database deletion was initiated.")
 		// Run finalization logic for database. If the
 		// finalization logic fails, don't remove the finalizer so
 		// that we can retry during the next reconciliation.
 		if sliceContainsSubString(dbcr.ObjectMeta.Finalizers, "dbuser.") {
 			err := errors.New("database can't be removed, while there are DbUser referencing it")
 			logrus.Error(err)
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
 		if containsString(dbcr.ObjectMeta.Finalizers, "db."+dbcr.Name) {
 			err := r.deleteDatabase(ctx, dbcr)
 			if err != nil {
 				logrus.Errorf("DB: namespace=%s, name=%s failed deleting database - %s", dbcr.Namespace, dbcr.Name, err)
 				// when database deletion failed, don't requeue request. to prevent exceeding api limit (ex: against google api)
-				return r.manageError(ctx, dbcr, err, false)
+				return r.manageError(ctx, dbcr, phase, err, false)
 			}
 			kci.RemoveFinalizer(&dbcr.ObjectMeta, "db."+dbcr.Name)
 			err = r.Update(ctx, dbcr)
 			if err != nil {
 				logrus.Errorf("error resource updating - %s", err)
-				return r.manageError(ctx, dbcr, err, true)
+				return r.manageError(ctx, dbcr, phase, err, true)
 			}
 		}
 		// legacy finalizer just remove
@@ -142,7 +143,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			err = r.Update(ctx, dbcr)
 			if err != nil {
 				logrus.Errorf("error resource updating - %s", err)
-				return r.manageError(ctx, dbcr, err, true)
+				return r.manageError(ctx, dbcr, phase, err, true)
 			}
 		}
 		return reconcileResult, nil
@@ -151,26 +152,26 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	databaseSecret, err := r.getDatabaseSecret(ctx, dbcr)
 	if err != nil && !k8serrors.IsNotFound(err) {
 		logrus.Errorf("could not get database secret - %s", err)
-		return r.manageError(ctx, dbcr, err, true)
+		return r.manageError(ctx, dbcr, phase, err, true)
 	}
 
 	if isDBChanged(dbcr, databaseSecret) {
 		logrus.Infof("DB: namespace=%s, name=%s spec changed", dbcr.Namespace, dbcr.Name)
 		err := r.initialize(ctx, dbcr)
 		if err != nil {
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
 		err = r.Status().Update(ctx, dbcr)
 		if err != nil {
 			logrus.Errorf("error status subresource updating - %s", err)
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
 
 		addDBChecksum(dbcr, databaseSecret)
 		err = r.Update(ctx, dbcr)
 		if err != nil {
 			logrus.Errorf("error resource updating - %s", err)
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
 		logrus.Infof("DB: namespace=%s, name=%s initialized", dbcr.Namespace, dbcr.Name)
 	}
@@ -188,56 +189,61 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			)
 		}
 
-		// TODO: remove phase variable, maybe send event where phase = Reason
-		phase := dbcr.Status.Phase
 		logrus.Infof("DB: namespace=%s, name=%s start %s", dbcr.Namespace, dbcr.Name, phase)
 
 		defer promDBsPhaseTime.WithLabelValues(phase).Observe(kci.TimeTrack(time.Now()))
-		// TODO: send event for each phase change below
 		err := r.createDatabase(ctx, dbcr, ownership)
 		if err != nil {
 			// when database creation failed, don't requeue request. to prevent exceeding api limit (ex: against google api)
-			return r.manageError(ctx, dbcr, err, false)
+			return r.manageError(ctx, dbcr, phase, err, false)
 		}
-		dbcr.Status.Phase = dbPhaseInstanceAccessSecret
+		phase = dbPhaseInstanceAccessSecret
+		r.Recorder.Event(dbcr, "Normal", phase, "Creating access secret if GCP instance")
 
 		if err = r.createInstanceAccessSecret(ctx, dbcr, ownership); err != nil {
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
-		dbcr.Status.Phase = dbPhaseProxy
+		phase = dbPhaseProxy
+		r.Recorder.Event(dbcr, "Normal", phase, "Creating proxy")
 		err = r.createProxy(ctx, dbcr, ownership)
 		if err != nil {
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
-		dbcr.Status.Phase = dbPhaseSecretsTemplating
+		phase = dbPhaseSecretsTemplating
+		r.Recorder.Event(dbcr, "Normal", phase, "Creating templated secrets")
 		if err = r.createTemplatedSecrets(ctx, dbcr, ownership); err != nil {
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
-		dbcr.Status.Phase = dbPhaseConfigMap
+		phase = dbPhaseConfigMap
+		r.Recorder.Event(dbcr, "Normal", phase, "Creating configmap")
 		if err = r.createInfoConfigMap(ctx, dbcr, ownership); err != nil {
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
-		dbcr.Status.Phase = dbPhaseTemplating
+		phase = dbPhaseTemplating
+		r.Recorder.Event(dbcr, "Normal", phase, "Creating templates")
 		// A temporary check that exists to avoid creating templates if secretsTemplates are used.
 		// todo: It should be removed when secretsTemlates are gone
 		if len(dbcr.Spec.SecretsTemplates) == 0 {
 			if err := r.renderTemplates(ctx, dbcr); err != nil {
-				return r.manageError(ctx, dbcr, err, false)
+				return r.manageError(ctx, dbcr, phase, err, false)
 			}
 		}
-		dbcr.Status.Phase = dbPhaseBackupJob
+		phase = dbPhaseBackupJob
+		r.Recorder.Event(dbcr, "Normal", phase, "Creating backup cronjob")
 		err = r.createBackupJob(ctx, dbcr, ownership)
 		if err != nil {
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
-		dbcr.Status.Phase = dbPhaseFinish
+		phase = dbPhaseFinish
+		r.Recorder.Event(dbcr, "Normal", phase, "Setting status of Database to true")
 		dbcr.Status.Status = true
-		dbcr.Status.Phase = dbPhaseReady
+		phase = dbPhaseReady
+		r.Recorder.Event(dbcr, "Normal", phase, "Database is created and all the configs are applied. Healthy status.")
 
 		err = r.Status().Update(ctx, dbcr)
 		if err != nil {
 			logrus.Errorf("error status subresource updating - %s", err)
-			return r.manageError(ctx, dbcr, err, true)
+			return r.manageError(ctx, dbcr, phase, err, true)
 		}
 		logrus.Infof("DB: namespace=%s, name=%s finish %s", dbcr.Namespace, dbcr.Name, phase)
 	}
@@ -286,8 +292,8 @@ func (r *DatabaseReconciler) initialize(ctx context.Context, dbcr *kindav1beta1.
 		if !instance.Status.Status {
 			return errors.New("instance status not true")
 		}
-		// TODO: send event
-		dbcr.Status.Phase = dbPhaseCreate
+		r.Recorder.Event(dbcr, "Normal", dbPhaseCreate, "Creating database")
+
 		return nil
 	}
 	return errors.New("instance name not defined")
@@ -844,14 +850,14 @@ func (r *DatabaseReconciler) getAdminSecret(ctx context.Context, dbcr *kindav1be
 	return secret, nil
 }
 
-func (r *DatabaseReconciler) manageError(ctx context.Context, dbcr *kindav1beta1.Database, issue error, requeue bool) (reconcile.Result, error) {
+func (r *DatabaseReconciler) manageError(ctx context.Context, dbcr *kindav1beta1.Database, phase string, issue error, requeue bool) (reconcile.Result, error) {
 	dbcr.Status.Status = false
-	logrus.Errorf("DB: namespace=%s, name=%s failed %s - %s", dbcr.Namespace, dbcr.Name, dbcr.Status.Phase, issue)
-	promDBsPhaseError.WithLabelValues(dbcr.Status.Phase).Inc()
+	logrus.Errorf("DB: namespace=%s, name=%s failed %s - %s", dbcr.Namespace, dbcr.Name, phase, issue)
+	promDBsPhaseError.WithLabelValues(phase).Inc()
 
 	retryInterval := 60 * time.Second
 
-	r.Recorder.Event(dbcr, "Warning", "Failed"+dbcr.Status.Phase, issue.Error())
+	r.Recorder.Event(dbcr, "Warning", "Failed"+phase, issue.Error())
 	err := r.Status().Update(ctx, dbcr)
 	if err != nil {
 		logrus.Error(err, "unable to update status")
